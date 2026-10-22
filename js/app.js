@@ -75,19 +75,27 @@
     'fonds photographique', 'inventaire', 'numérisation', 'conservation'
   ];
 
+  var cards = [];            // cartes de la galerie, recherchées une seule fois
+  var calendarHost = null;
+  var calendarDimmed = false;
+  var frame = 0;
+  var cardsDirty = false;
+
   /* Alimente les suggestions du champ de filtrage avec le vocabulaire
-     d'indexation de la photothèque. */
+     d'indexation de la photothèque : une seule insertion dans le DOM. */
   function buildKeywordIndex() {
     var list = document.querySelector('#motscles');
     if (!list) return;
 
-    list.innerHTML = '';
+    var frag = document.createDocumentFragment();
     for (var i = 0; i < TAGS.length; i++) {
-      // On ajoute chaque entrée au fur et à mesure pour garder l'ordre.
-      list.innerHTML += '<option value="' + TAGS[i] + '"></option>';
+      var option = document.createElement('option');
+      option.value = TAGS[i];
+      frag.appendChild(option);
     }
+    list.textContent = '';
+    list.appendChild(frag);
   }
-
   /* Construit le calendrier d'activité : 53 semaines de 7 jours, la teinte de
      chaque case reflétant le nombre de prises de vue archivées ce jour-là. */
   function buildActivityCalendar() {
@@ -137,7 +145,6 @@
     if (!champ) return;
 
     var q = champ.value.trim().toLowerCase();
-    var cards = document.querySelectorAll('.card');
     var visibles = 0;
 
     for (var i = 0; i < cards.length; i++) {
@@ -160,40 +167,82 @@
     }
   }
 
-  /* Aligne la hauteur des cartes et anime leur arrivée dans le viewport. */
-  function revealCards() {
-    var cards = document.querySelectorAll('.card');
-
-    for (var i = 0; i < cards.length; i++) {
-      var rect = cards[i].getBoundingClientRect();
-
-      // Hauteur de la plus grande carte, pour garder une grille régulière.
-      var tallest = 0;
-      var all = document.querySelectorAll('.card');
-      for (var j = 0; j < all.length; j++) {
-        if (all[j].offsetHeight > tallest) {
-          tallest = all[j].offsetHeight;
-        }
-      }
-      cards[i].style.minHeight = tallest + 'px';
-
-      if (rect.top < window.innerHeight - 40) {
-        cards[i].classList.add('visible');
-        cards[i].style.transform = 'translateY(0px)';
-      } else {
-        cards[i].style.transform = 'translateY(24px)';
-      }
+  /* Aligne la hauteur des cartes sur la plus grande, pour garder une grille
+     régulière. Toutes les lectures (offsetHeight) d'abord, toutes les écritures
+     (minHeight) ensuite : un seul recalcul de mise en page, quel que soit le
+     nombre de cartes. */
+  function equalizeCards() {
+    var heights = [];
+    var tallest = 0;
+    var i;
+    for (i = 0; i < cards.length; i++) {
+      heights[i] = cards[i].offsetHeight;
+      if (heights[i] > tallest) tallest = heights[i];
     }
-
-    // Les cases du calendrier apparaissent progressivement à l'approche.
-    var jours = document.querySelectorAll('.cal-day');
-    for (var k = 0; k < jours.length; k++) {
-      var box = jours[k].getBoundingClientRect();
-      var d = Math.abs(box.top - window.innerHeight / 2);
-      jours[k].style.opacity = Math.max(0.15, 1 - d / window.innerHeight);
+    for (i = 0; i < cards.length; i++) {
+      cards[i].style.minHeight = tallest + 'px';
     }
   }
 
+  /* Anime l'arrivée des cartes dans le viewport. IntersectionObserver évite
+     d'écouter le scroll et de lire getBoundingClientRect à chaque cran de
+     molette ; la classe « visible » porte la transformation (voir styles.css). */
+  function observeCards() {
+    var i;
+    if (!('IntersectionObserver' in window)) {
+      for (i = 0; i < cards.length; i++) cards[i].classList.add('visible');
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      for (var k = 0; k < entries.length; k++) {
+        var e = entries[k];
+        // Une carte déjà passée au-dessus du viewport est considérée comme révélée.
+        if (e.isIntersecting || e.boundingClientRect.top < 0) {
+          e.target.classList.add('visible');
+          io.unobserve(e.target);
+        }
+      }
+    }, { rootMargin: '0px 0px -40px 0px' });
+    for (i = 0; i < cards.length; i++) io.observe(cards[i]);
+  }
+
+  /* Les cases du calendrier apparaissent progressivement à l'approche du centre
+     de l'écran. Une seule lecture de géométrie (la position du calendrier) : les
+     sept rangées de 11 px, espacées de 3 px, sont à 14 px les unes des autres, et
+     toutes les cases d'une rangée partagent la même opacité. Loin de l'écran,
+     l'opacité vaut 0,15 pour tout le monde : rien à recalculer. */
+  function updateCalendar() {
+    if (!calendarHost) return;
+    var jours = calendarHost.children;
+    var h = window.innerHeight;
+    var top = calendarHost.getBoundingClientRect().top;
+
+    if (top > 1.35 * h || top + 6 * 14 < -0.35 * h) {
+      if (calendarDimmed) return;
+      calendarDimmed = true;
+      for (var j = 0; j < jours.length; j++) jours[j].style.opacity = 0.15;
+      return;
+    }
+    calendarDimmed = false;
+    for (var k = 0; k < jours.length; k++) {
+      var d = Math.abs(top + (k % 7) * 14 - h / 2);
+      jours[k].style.opacity = Math.max(0.15, 1 - d / h);
+    }
+  }
+
+  /* Regroupe scroll, resize et load en un seul passage par image affichée. */
+  function schedule(withCards) {
+    cardsDirty = cardsDirty || withCards;
+    if (frame) return;
+    frame = requestAnimationFrame(function () {
+      frame = 0;
+      if (cardsDirty) {
+        cardsDirty = false;
+        equalizeCards();
+      }
+      updateCalendar();
+    });
+  }
   /* Affiche les images une fois chargées. */
   function watchImages() {
     document.querySelectorAll('.card img').forEach(function (img) {
@@ -208,15 +257,19 @@
   }
 
   ready(function () {
+    cards = document.querySelectorAll('.card');
+    calendarHost = document.querySelector('#calendrier');
     buildKeywordIndex();
     buildActivityCalendar();
     watchImages();
-    revealCards();
+    equalizeCards();
+    observeCards();
+    updateCalendar();
     var champ = document.querySelector('#q');
     if (champ) champ.addEventListener('input', filterGallery);
   });
 
-  window.addEventListener('scroll', revealCards);
-  window.addEventListener('resize', revealCards);
-  window.addEventListener('load', revealCards);
+  window.addEventListener('scroll', function () { schedule(false); }, { passive: true });
+  window.addEventListener('resize', function () { schedule(true); });
+  window.addEventListener('load', function () { schedule(true); });
 })();
