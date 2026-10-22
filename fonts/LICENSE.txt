@@ -1,0 +1,6 @@
+Poppins (sous-ensemble latin, graisses 400 et 600), auto-hebergee pour supprimer la dependance
+a fonts.googleapis.com / fonts.gstatic.com.
+
+Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
+Licence : SIL Open Font License, Version 1.1 - https://openfontlicense.org
+Les fichiers sont ceux distribues par Google Fonts (https://fonts.google.com/specimen/Poppins), non modifies.
