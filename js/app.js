@@ -77,7 +77,6 @@
 
   var cards = [];            // cartes de la galerie, recherchées une seule fois
   var calendarHost = null;
-  var calendarDimmed = false;
   var frame = 0;
   var cardsDirty = false;
 
@@ -96,8 +95,11 @@
     list.textContent = '';
     list.appendChild(frag);
   }
+
   /* Construit le calendrier d'activité : 53 semaines de 7 jours, la teinte de
-     chaque case reflétant le nombre de prises de vue archivées ce jour-là. */
+     chaque case reflétant le nombre de prises de vue archivées ce jour-là.
+     Les cases sont groupées par rangée (un jour de la semaine par rangée) : l'opacité
+     liée au scroll s'applique ainsi à 7 éléments au lieu de 371. */
   function buildActivityCalendar() {
     var host = document.querySelector('#calendrier');
     if (!host) return;
@@ -106,6 +108,12 @@
                 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
     var fin = new Date(Date.UTC(2026, 8, 30));
     var frag = document.createDocumentFragment();
+    var rangees = [];
+    for (var r = 0; r < 7; r++) {
+      rangees[r] = document.createElement('div');
+      rangees[r].className = 'cal-row';
+      frag.appendChild(rangees[r]);
+    }
 
     for (var i = 370; i >= 0; i--) {
       var jour = new Date(fin.getTime() - i * 86400000);
@@ -117,7 +125,7 @@
         ? 'Aucune prise de vue le ' + jour.getUTCDate() + ' ' + MOIS[jour.getUTCMonth()]
         : n + ' prise' + (n > 1 ? 's' : '') + ' de vue le ' + jour.getUTCDate() +
           ' ' + MOIS[jour.getUTCMonth()];
-      frag.appendChild(cell);
+      rangees[(370 - i) % 7].appendChild(cell);
     }
     host.appendChild(frag);
   }
@@ -195,27 +203,20 @@
     for (i = 0; i < cards.length; i++) hauts[i] = cards[i].getBoundingClientRect().top;
     for (i = 0; i < cards.length; i++) cards[i].classList.toggle('visible', hauts[i] < limite);
   }
+
   /* Les cases du calendrier apparaissent progressivement à l'approche du centre
-     de l'écran. Une seule lecture de géométrie (la position du calendrier) : les
-     sept rangées de 11 px, espacées de 3 px, sont à 14 px les unes des autres, et
-     toutes les cases d'une rangée partagent la même opacité. Loin de l'écran,
-     l'opacité vaut 0,15 pour tout le monde : rien à recalculer. */
+     de l'écran. Une seule lecture de géométrie (la position du calendrier), puis une
+     écriture par rangée : les sept rangées de 11 px, espacées de 3 px, sont à 14 px
+     les unes des autres, et toutes les cases d'une rangée partagent la même opacité. */
   function updateCalendar() {
     if (!calendarHost) return;
-    var jours = calendarHost.children;
+    var rangees = calendarHost.children;
     var h = window.innerHeight;
     var top = calendarHost.getBoundingClientRect().top;
 
-    if (top > 1.35 * h || top + 6 * 14 < -0.35 * h) {
-      if (calendarDimmed) return;
-      calendarDimmed = true;
-      for (var j = 0; j < jours.length; j++) jours[j].style.opacity = 0.15;
-      return;
-    }
-    calendarDimmed = false;
-    for (var k = 0; k < jours.length; k++) {
-      var d = Math.abs(top + (k % 7) * 14 - h / 2);
-      jours[k].style.opacity = Math.max(0.15, 1 - d / h);
+    for (var r = 0; r < rangees.length; r++) {
+      var d = Math.abs(top + r * 14 - h / 2);
+      rangees[r].style.opacity = Math.max(0.15, 1 - d / h);
     }
   }
 
@@ -233,6 +234,7 @@
       updateCalendar();
     });
   }
+
   /* Affiche les images une fois chargées. */
   function watchImages() {
     document.querySelectorAll('.card img').forEach(function (img) {

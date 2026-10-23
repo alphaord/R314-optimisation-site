@@ -50,9 +50,11 @@ a{color:var(--fg);text-decoration:none;opacity:.9}a:hover{opacity:1}
 .activity-title{margin:0 0 2px;font-size:18px}
 .activity-sub{margin:0 0 12px;color:var(--muted);font-size:14px}
 .activity-scroll{overflow-x:auto;padding-bottom:4px}
-.calendar{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,11px);
-  grid-auto-columns:11px;gap:3px;width:max-content}
-.cal-day{border-radius:2px;background:var(--lvl0);transition:opacity .25s linear}
+/* 7 rangees (une par jour de la semaine) de 53 cases : l'opacite liee au scroll porte sur la rangee,
+   donc sur 7 elements au lieu de 371. min-height = place reservee avant la construction par app.js. */
+.calendar{display:flex;flex-direction:column;gap:3px;width:max-content;min-height:95px}
+.cal-row{display:flex;gap:3px;transition:opacity .25s linear}
+.cal-day{flex:none;width:11px;height:11px;border-radius:2px;background:var(--lvl0)}
 /* Rampe séquentielle à teinte unique, du plus sombre au plus clair. */
 .cal-day[data-n="1"]{background:var(--lvl1)}
 .cal-day[data-n="2"]{background:var(--lvl2)}
