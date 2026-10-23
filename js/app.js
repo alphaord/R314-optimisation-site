@@ -184,28 +184,17 @@
     }
   }
 
-  /* Anime l'arrivée des cartes dans le viewport. IntersectionObserver évite
-     d'écouter le scroll et de lire getBoundingClientRect à chaque cran de
-     molette ; la classe « visible » porte la transformation (voir styles.css). */
-  function observeCards() {
+  /* Anime l'arrivée des cartes dans le viewport : une carte est révélée tant que son
+     haut est au-dessus du bord bas de l'écran (moins 40 px). La classe « visible »
+     porte la transformation (voir styles.css). Toutes les positions sont lues
+     d'abord, les classes écrites ensuite. */
+  function updateCards() {
+    var limite = window.innerHeight - 40;
+    var hauts = [];
     var i;
-    if (!('IntersectionObserver' in window)) {
-      for (i = 0; i < cards.length; i++) cards[i].classList.add('visible');
-      return;
-    }
-    var io = new IntersectionObserver(function (entries) {
-      for (var k = 0; k < entries.length; k++) {
-        var e = entries[k];
-        // Une carte déjà passée au-dessus du viewport est considérée comme révélée.
-        if (e.isIntersecting || e.boundingClientRect.top < 0) {
-          e.target.classList.add('visible');
-          io.unobserve(e.target);
-        }
-      }
-    }, { rootMargin: '0px 0px -40px 0px' });
-    for (i = 0; i < cards.length; i++) io.observe(cards[i]);
+    for (i = 0; i < cards.length; i++) hauts[i] = cards[i].getBoundingClientRect().top;
+    for (i = 0; i < cards.length; i++) cards[i].classList.toggle('visible', hauts[i] < limite);
   }
-
   /* Les cases du calendrier apparaissent progressivement à l'approche du centre
      de l'écran. Une seule lecture de géométrie (la position du calendrier) : les
      sept rangées de 11 px, espacées de 3 px, sont à 14 px les unes des autres, et
@@ -240,6 +229,7 @@
         cardsDirty = false;
         equalizeCards();
       }
+      updateCards();
       updateCalendar();
     });
   }
@@ -263,7 +253,7 @@
     buildActivityCalendar();
     watchImages();
     equalizeCards();
-    observeCards();
+    updateCards();
     updateCalendar();
     var champ = document.querySelector('#q');
     if (champ) champ.addEventListener('input', filterGallery);
